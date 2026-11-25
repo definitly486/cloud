@@ -2,7 +2,7 @@ usermod -aG sudo vcore
 apt update 
 apt install jwm xorg git curl  firefox-esr-l10n-ru  l3afpad mc \
 pcmanfm qemu-utils qemu-system-x86 jgmenu alacritty \
-sudo  pipewire wireplumber pipewire-audio
+sudo  pipewire wireplumber pipewire-audio pasystray pavucontrol 
 
 cat << 'EOF' > /home/vcore/.xinitrc
 #!/bin/sh
