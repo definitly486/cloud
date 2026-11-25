@@ -221,10 +221,6 @@ chpasswd:
 ssh_pwauth: true
 
 write_files:
-  - path: /root/vcore-password.hash
-    owner: root:root
-    permissions: '0600'
-    content: '$PASSWORD_HASH'
   - path: /etc/ssh/sshd_config.d/10-vcore-password.conf
     owner: root:root
     permissions: '0600'
@@ -272,9 +268,9 @@ EOF
         useradd --create-home --shell /bin/bash vcore
     fi
     usermod -aG wheel,audio,video,storage,optical,input vcore
-    usermod --password "$(cat /root/vcore-password.hash)" vcore
+    # cloud-init already sets the SHA-512 password hash from users[].passwd.
+    # Do not overwrite it here: the old version wrote a literal '$PASSWORD_HASH'.
     usermod -U vcore
-    rm -f /root/vcore-password.hash
 
     echo
     echo "========== НАСТРОЙКА И ВКЛЮЧЕНИЕ SSH =========="
