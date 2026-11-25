@@ -161,6 +161,7 @@ prepare_uefi()
     fi
 }
 
+
 make_cloud_init()
 {
     echo
@@ -181,16 +182,13 @@ make_cloud_init()
 #cloud-config
 hostname: $VM_NAME
 manage_etc_hosts: true
-package_update: true
+
+package_update: false
 package_upgrade: false
-packages:
-EOF
 
-    for package in $PACKAGES; do
-        printf '  - %s\n' "$package" >> "$USER_DATA"
-    done
+output:
+  all: "| tee -a /var/log/cloud-init-output.log"
 
-    cat >> "$USER_DATA" <<EOF
 users:
   - default
   - name: $LOGIN_USER
@@ -209,10 +207,47 @@ EOF
 EOF
     fi
 
-    cat >> "$USER_DATA" <<EOF
+    cat >> "$USER_DATA" <<'EOF'
 chpasswd:
   expire: false
 ssh_pwauth: true
+
+runcmd:
+  - |
+    set -o pipefail
+    export DEBIAN_FRONTEND=noninteractive
+
+    echo
+    echo "========== ОБНОВЛЕНИЕ СПИСКА ПАКЕТОВ =========="
+    apt-get update
+
+    if [ "$?" -ne 0 ]; then
+        echo "ОШИБКА: apt-get update"
+        exit 1
+    fi
+
+    echo
+    echo "========== УСТАНОВКА ПАКЕТОВ =========="
+
+    apt-get install -y \
+EOF
+
+    for package in $PACKAGES; do
+        printf '      %s \\\n' "$package" >> "$USER_DATA"
+    done
+
+    # Убираем завершающий обратный слеш у последнего пакета.
+    sed -i '' '$s/ \\$//' "$USER_DATA"
+
+    cat >> "$USER_DATA" <<'EOF'
+
+    if [ "$?" -ne 0 ]; then
+        echo "ОШИБКА: установка пакетов"
+        exit 1
+    fi
+
+    echo
+    echo "========== УСТАНОВКА ЗАВЕРШЕНА =========="
 EOF
 
     cat > "$META_DATA" <<EOF
@@ -223,6 +258,7 @@ EOF
     write_network_config
     build_seed_iso
 }
+
 
 write_network_config()
 {
