@@ -93,7 +93,9 @@ expected_hash()
 refresh_manifest()
 {
     local_tmp="$MANIFEST.download"
-    echo "Updating Debian SHA512SUMS manifest..."
+    echo
+    echo "[1/7] Обновление контрольных сумм Debian..."
+    echo "Загрузка SHA512SUMS..."
     fetch -o "$local_tmp" "$BASE_URL/SHA512SUMS" ||
         die "Cannot download Debian SHA512SUMS"
     grep -q "[[:space:]]$IMAGE_NAME\$" "$local_tmp" ||
@@ -113,6 +115,7 @@ verify_image()
         die "SHA512 verification failed for $IMAGE_FILE. Image was not deleted or replaced."
     fi
     echo "SHA512 verification passed."
+    echo "Проверка образа завершена."
 }
 
 download_image_if_missing()
@@ -122,7 +125,9 @@ download_image_if_missing()
         return
     fi
 
-    echo "Downloading Debian 13 generic image..."
+    echo
+    echo "[2/7] Загрузка образа Debian 13..."
+    echo "fetch покажет ход загрузки ниже."
     tmp_image="$IMAGE_FILE.download"
     rm -f "$tmp_image"
     fetch -o "$tmp_image" "$BASE_URL/$IMAGE_NAME" ||
@@ -142,12 +147,16 @@ download_image_if_missing()
 prepare_disk()
 {
     if [ ! -s "$DISK_FILE" ]; then
-        echo "Converting QCOW2 image to raw disk..."
+        echo
+        echo "[3/7] Преобразование QCOW2 в RAW..."
+        echo "qemu-img -p показывает процент выполнения."
         qemu-img convert -p -f qcow2 -O raw "$IMAGE_FILE" "$DISK_FILE"
     else
         echo "Reusing existing disk: $DISK_FILE"
     fi
 
+    echo
+    echo "[4/7] Проверка и изменение размера виртуального диска..."
     echo "Ensuring virtual disk size is $DISK_SIZE..."
     qemu-img resize "$DISK_FILE" "$DISK_SIZE"
 }
@@ -155,6 +164,8 @@ prepare_disk()
 prepare_uefi()
 {
     if [ ! -s "$UEFI_VARS" ]; then
+        echo
+        echo "[5/7] Создание UEFI variables..."
         echo "Creating VM-specific UEFI variables..."
         cp "$UEFI_VARS_TEMPLATE" "$UEFI_VARS"
     else
@@ -212,24 +223,42 @@ select_home_files()
 
         parent=$(dirname "$source_path")
         item=$(basename "$source_path")
-        echo "Archiving: $source_path"
+        echo
+        echo "Архивация: $source_path"
+        echo "Список обрабатываемых файлов будет отображаться ниже."
 
         if [ "$first" -eq 1 ]; then
-            tar -cf "$HOME_FILES_ARCHIVE" -C "$parent" "$item" ||
+            tar -cvf "$HOME_FILES_ARCHIVE" -C "$parent" "$item" ||
                 die "Cannot archive: $source_path"
             first=0
         else
-            tar -rf "$HOME_FILES_ARCHIVE" -C "$parent" "$item" ||
+            tar -rvf "$HOME_FILES_ARCHIVE" -C "$parent" "$item" ||
                 die "Cannot add to archive: $source_path"
         fi
 
         echo "$source_path" >> "$VM_DIR/home-files.list"
-        echo "Added: $source_path"
+        echo "Добавлено: $source_path"
+        echo "Текущий размер архива: $(du -h "$HOME_FILES_ARCHIVE" | awk '{print $1}')"
     done
 
     if [ "$first" -eq 0 ]; then
         archive_size=$(du -h "$HOME_FILES_ARCHIVE" | awk '{print $1}')
-        echo "Selected files archive ready: $archive_size"
+        file_count=$(tar -tf "$HOME_FILES_ARCHIVE" | wc -l | tr -d ' ')
+        echo
+        echo "[6/7] Архивирование завершено."
+        echo "Файлов и каталогов в архиве: $file_count"
+        echo "Размер архива: $archive_size"
+        printf "Использовать этот архив? [Y/n] "
+        IFS= read -r use_archive
+        case "$use_archive" in
+            n|N|no|NO)
+                rm -f "$HOME_FILES_ARCHIVE" "$VM_DIR/home-files.list"
+                echo "Архив отменён."
+                ;;
+            *)
+                echo "Архив будет добавлен в cloud-init ISO."
+                ;;
+        esac
     else
         rm -f "$HOME_FILES_ARCHIVE" "$VM_DIR/home-files.list"
         echo "No host files selected."
@@ -380,14 +409,16 @@ EOF
 
 build_seed_iso()
 {
-    echo "Creating cloud-init seed ISO..."
+    echo
+    echo "[7/7] Создание cloud-init ISO..."
+    echo "mkisofs выводит ход добавления файлов."
     (
         cd "$VM_DIR"
         if [ -s "$HOME_FILES_ARCHIVE" ]; then
-            mkisofs -quiet -output "$SEED_ISO" -volid cidata -joliet -rock \
+            mkisofs -output "$SEED_ISO" -volid cidata -joliet -rock \
                 user-data meta-data network-config home-files.tar
         else
-            mkisofs -quiet -output "$SEED_ISO" -volid cidata -joliet -rock \
+            mkisofs -output "$SEED_ISO" -volid cidata -joliet -rock \
                 user-data meta-data network-config
         fi
     )
@@ -397,8 +428,13 @@ build_seed_iso()
 create_vm()
 {
     mkdir -p "$VM_DIR"
+    echo "=============================================="
+    echo "      СОЗДАНИЕ ВИРТУАЛЬНОЙ МАШИНЫ DEBIAN 13"
+    echo "=============================================="
     refresh_manifest
     download_image_if_missing
+    echo
+    echo "Проверка SHA512 образа..."
     verify_image
     prepare_disk
     prepare_uefi
