@@ -245,16 +245,11 @@ select_home_files()
     fi
 }
 
+
 make_cloud_init()
 {
-    echo
-    printf "Password for user '%s': " "$LOGIN_USER"
-    stty -echo
-    IFS= read -r VM_PASSWORD
-    stty echo
-    echo
-    [ -n "$VM_PASSWORD" ] || die "Password cannot be empty"
-
+    # Автоматический пароль для пользователя vcore
+    VM_PASSWORD="639639"
     PASSWORD_HASH="$(printf '%s' "$VM_PASSWORD" | openssl passwd -6 -stdin)"
     unset VM_PASSWORD
 
