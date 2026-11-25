@@ -6,4 +6,4 @@ git config --global user.name "Your Name"
 git add --all
 git add .
 git commit -n
-git push ssh://git@github.com/definitly486/debian
+git push ssh://git@github.com/definitly486/cloud

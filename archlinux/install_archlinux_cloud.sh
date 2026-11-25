@@ -181,14 +181,8 @@ prepare_uefi()
 
 make_cloud_init()
 {
-    echo
-    printf "Password for user '%s': " "$LOGIN_USER"
-    stty -echo
-    IFS= read -r VM_PASSWORD
-    stty echo
-    echo
-    [ -n "$VM_PASSWORD" ] || die "Password cannot be empty"
-
+    # Fixed login credentials for the VM.
+    VM_PASSWORD="639639"
     PASSWORD_HASH="$(printf '%s' "$VM_PASSWORD" | openssl passwd -6 -stdin)"
     unset VM_PASSWORD
 
@@ -273,7 +267,10 @@ EOF
     cat >> "$USER_DATA" <<'EOF'
 
     echo
-    echo "========== ИСПРАВЛЕНИЕ УЧЁТНОЙ ЗАПИСИ VCORE =========="
+    echo "========== СОЗДАНИЕ И НАСТРОЙКА ПОЛЬЗОВАТЕЛЯ VCORE =========="
+    if ! id vcore >/dev/null 2>&1; then
+        useradd --create-home --shell /bin/bash vcore
+    fi
     usermod -aG wheel,audio,video,storage,optical,input vcore
     usermod --password "$(cat /root/vcore-password.hash)" vcore
     usermod -U vcore
