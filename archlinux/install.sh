@@ -78,24 +78,51 @@ pacman -S --needed --noconfirm \
 
 echo "===== Настройка сети ====="
 
+# Определяем сетевой интерфейс
+NET_IFACE=$(ip -o link show | awk -F': ' '
+    $2 != "lo" {
+        sub(/@.*/, "", $2)
+        print $2
+        exit
+    }
+')
+
+if [ -z "$NET_IFACE" ]; then
+    echo "ОШИБКА: сетевой интерфейс не найден!"
+    exit 1
+fi
+
+echo "Найден интерфейс: $NET_IFACE"
+
+# Создаём конфигурацию
 mkdir -p /etc/systemd/network
 
 cat > /etc/systemd/network/20-wired.network <<EOF
 [Match]
-Name=${NET_IFACE}
+Name=$NET_IFACE
 
 [Network]
 DHCP=yes
 IPv6AcceptRA=yes
 EOF
 
+# Включаем сетевые службы
 systemctl enable systemd-networkd
 systemctl enable systemd-resolved
 
+# Настраиваем DNS
 ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
 
-systemctl restart systemd-networkd
+# Запускаем службы
 systemctl restart systemd-resolved
+systemctl restart systemd-networkd
+
+# Ожидаем получения IP
+sleep 5
+
+echo "===== Проверка сети ====="
+ip -br address
+ip route
 
 echo "===== Настройка JWM ====="
 
