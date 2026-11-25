@@ -1,5 +1,31 @@
 #!/bin/sh
-wget "https://github.com/definitly486/debian/archive/main.tar.gz"
-tar -xf main.tar.gz
-cd debian-main
+
+URL="https://github.com/definitly486/debian/archive/main.tar.gz"
+ARCHIVE="main.tar.gz"
+
+echo "===== Скачивание репозитория ====="
+
+if command -v wget >/dev/null 2>&1; then
+    wget -O "$ARCHIVE" "$URL"
+elif command -v curl >/dev/null 2>&1; then
+    curl -L -o "$ARCHIVE" "$URL"
+else
+    echo "Ошибка: отсутствуют wget и curl."
+    exit 1
+fi
+
+if [ $? -ne 0 ]; then
+    echo "Ошибка скачивания архива."
+    exit 1
+fi
+
+echo "===== Распаковка ====="
+
+tar -xf "$ARCHIVE" || exit 1
+
+cd cloud-main || exit 1
+
+echo "===== Запуск установки ====="
+
+chmod +x install.sh
 ./install.sh
