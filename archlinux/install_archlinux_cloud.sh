@@ -229,6 +229,21 @@ write_files:
       KbdInteractiveAuthentication yes
 
 runcmd:
+  # Configure the login account and sudo before package operations.
+  # A pacman/network failure must not leave vcore without administrative access.
+  - |
+    set -eu
+    if ! id vcore >/dev/null 2>&1; then
+      useradd --create-home --shell /bin/bash vcore
+    fi
+    usermod -aG wheel,audio,video,storage,optical,input vcore
+    printf '%s\n' 'vcore:639639' | chpasswd
+    usermod -U vcore
+    install -d -m 0750 /etc/sudoers.d
+    printf '%s\n' 'vcore ALL=(ALL:ALL) NOPASSWD: ALL' > /etc/sudoers.d/10-vcore
+    chmod 0440 /etc/sudoers.d/10-vcore
+    passwd -l root || true
+
   - |
     set -euo pipefail
     export LANG=C
@@ -263,14 +278,9 @@ EOF
     cat >> "$USER_DATA" <<'EOF'
 
     echo
-    echo "========== СОЗДАНИЕ И НАСТРОЙКА ПОЛЬЗОВАТЕЛЯ VCORE =========="
-    if ! id vcore >/dev/null 2>&1; then
-        useradd --create-home --shell /bin/bash vcore
-    fi
-    usermod -aG wheel,audio,video,storage,optical,input vcore
-    # Set the password explicitly as well as through users[].passwd.
-    printf '%s\n' 'vcore:639639' | chpasswd
-    usermod -U vcore
+    echo "========== ПРОВЕРКА SUDOERS И БЛОКИРОВКА ROOT =========="
+    visudo -c
+    passwd -l root || true
 
     echo
     echo "========== НАСТРОЙКА И ВКЛЮЧЕНИЕ SSH =========="
@@ -377,6 +387,10 @@ runcmd:
     usermod -aG wheel,audio,video,storage,optical,input vcore
     printf '%s\n' 'vcore:639639' | chpasswd
     usermod -U vcore
+    install -d -m 0750 /etc/sudoers.d
+    printf '%s\n' 'vcore ALL=(ALL:ALL) NOPASSWD: ALL' > /etc/sudoers.d/10-vcore
+    chmod 0440 /etc/sudoers.d/10-vcore
+    passwd -l root || true
     systemctl enable --now sshd
     sshd -t
     systemctl restart sshd
