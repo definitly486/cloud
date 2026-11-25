@@ -27,6 +27,7 @@ SEED_ISO="$VM_DIR/cloud-init.iso"
 USER_DATA="$VM_DIR/user-data"
 META_DATA="$VM_DIR/meta-data"
 NETWORK_CONFIG="$VM_DIR/network-config"
+HOME_FILES_ARCHIVE="$VM_DIR/home-files.tar"
 
 UEFI_CODE="/usr/local/share/uefi-firmware/BHYVE_UEFI.fd"
 UEFI_VARS_TEMPLATE="/usr/local/share/uefi-firmware/BHYVE_UEFI_VARS.fd"
@@ -162,6 +163,52 @@ prepare_uefi()
 }
 
 
+select_home_files()
+{
+    HOME_FILES_B64=""
+
+    echo
+    echo "Select files or directories from the FreeBSD host."
+    echo "Enter one full path per line; an empty line finishes selection."
+    echo "Selected items will be placed in /home/$LOGIN_USER by their names."
+    rm -f "$HOME_FILES_ARCHIVE"
+
+    first=1
+    while :; do
+        printf "Host path (empty to finish): "
+        IFS= read -r source_path
+        [ -n "$source_path" ] || break
+
+        if [ ! -e "$source_path" ]; then
+            echo "Path does not exist: $source_path" >&2
+            continue
+        fi
+
+        parent=$(dirname "$source_path")
+        item=$(basename "$source_path")
+        [ "$item" != "/" ] || {
+            echo "Selecting / itself is not supported." >&2
+            continue
+        }
+
+        if [ "$first" -eq 1 ]; then
+            tar -cf "$HOME_FILES_ARCHIVE" -C "$parent" "$item" ||
+                die "Cannot archive: $source_path"
+            first=0
+        else
+            tar -rf "$HOME_FILES_ARCHIVE" -C "$parent" "$item" ||
+                die "Cannot add to archive: $source_path"
+        fi
+    done
+
+    if [ "$first" -eq 0 ]; then
+        echo "Encoding selected files for cloud-init..."
+        HOME_FILES_B64="$(base64 < "$HOME_FILES_ARCHIVE" | tr -d '\n')"
+        [ -n "$HOME_FILES_B64" ] || die "Could not encode selected files"
+        rm -f "$HOME_FILES_ARCHIVE"
+    fi
+}
+
 make_cloud_init()
 {
     echo
@@ -177,6 +224,8 @@ make_cloud_init()
 
     printf "SSH public key (leave empty to skip): "
     IFS= read -r SSH_KEY
+
+    select_home_files
 
     cat > "$USER_DATA" <<EOF
 #cloud-config
@@ -204,6 +253,18 @@ EOF
         cat >> "$USER_DATA" <<EOF
     ssh_authorized_keys:
       - $SSH_KEY
+EOF
+    fi
+
+    if [ -n "$HOME_FILES_B64" ]; then
+        cat >> "$USER_DATA" <<EOF
+write_files:
+  - path: /var/tmp/vcore-home-files.tar.b64
+    owner: root:root
+    permissions: '0600'
+    encoding: b64
+    content: |
+      $HOME_FILES_B64
 EOF
     fi
 
@@ -262,6 +323,14 @@ EOF
 
     echo
     echo "========== УСТАНОВКА ЗАВЕРШЕНА =========="
+
+    if [ -f /var/tmp/vcore-home-files.tar.b64 ]; then
+        echo "========== КОПИРОВАНИЕ В ДОМАШНЮЮ ПАПКУ =========="
+        base64 -d /var/tmp/vcore-home-files.tar.b64 | tar -xf - -C "/home/$LOGIN_USER"
+        chown -R "$LOGIN_USER:$LOGIN_USER" "/home/$LOGIN_USER"
+        rm -f /var/tmp/vcore-home-files.tar.b64
+        echo "Selected files copied to /home/$LOGIN_USER"
+    fi
 EOF
 
     cat > "$META_DATA" <<EOF
