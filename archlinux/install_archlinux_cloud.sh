@@ -27,8 +27,6 @@ SEED_ISO="$VM_DIR/cloud-init.iso"
 USER_DATA="$VM_DIR/user-data"
 META_DATA="$VM_DIR/meta-data"
 NETWORK_CONFIG="$VM_DIR/network-config"
-HOME_FILES_YAML="$VM_DIR/home-files-cloud-init.yml"
-HOME_FILES_LIST="$VM_DIR/home-files-list.txt"
 
 UEFI_CODE="/usr/local/share/uefi-firmware/BHYVE_UEFI.fd"
 UEFI_VARS_TEMPLATE="/usr/local/share/uefi-firmware/BHYVE_UEFI_VARS.fd"
@@ -181,71 +179,6 @@ prepare_uefi()
     fi
 }
 
-select_home_files()
-{
-    : > "$HOME_FILES_YAML"
-    printf "\nПапка с файлами на FreeBSD (Enter — пропустить): "
-    IFS= read -r source_dir
-
-    [ -n "$source_dir" ] || {
-        echo "Копирование дополнительных файлов пропущено."
-        return
-    }
-
-    [ -d "$source_dir" ] || die "Directory not found: $source_dir"
-
-    find "$source_dir" -type f -print | sort > "$HOME_FILES_LIST"
-    [ -s "$HOME_FILES_LIST" ] || {
-        echo "В папке нет файлов."
-        return
-    }
-
-    printf '\nДоступные файлы:\n'
-    number=1
-    while IFS= read -r file; do
-        relative_path=${file#"$source_dir"/}
-        printf "  %3s) %s\n" "$number" "$relative_path"
-        number=$((number + 1))
-    done < "$HOME_FILES_LIST"
-
-    printf "\nВведите номера через пробел (например: 1 3 5), all — все, Enter — пропустить: "
-    IFS= read -r selection
-
-    [ -n "$selection" ] || { echo "Выбор файлов пропущен."; return; }
-
-    if [ "$selection" = "all" ] || [ "$selection" = "ALL" ]; then
-        selected_numbers=""
-        number=1
-        while IFS= read -r file; do
-            selected_numbers="$selected_numbers $number"
-            number=$((number + 1))
-        done < "$HOME_FILES_LIST"
-    else
-        selected_numbers=$(printf "%s\n" "$selection" | tr "," " ")
-    fi
-
-    for number in $selected_numbers; do
-        case "$number" in
-            ''|*[!0-9]*) die "Invalid file number: $number" ;;
-        esac
-        [ "$number" -gt 0 ] || die "Invalid file number: $number"
-
-        file=$(sed -n "${number}p" "$HOME_FILES_LIST")
-        [ -n "$file" ] || die "File number does not exist: $number"
-        relative_path=${file#"$source_dir"/}
-        destination="/home/$LOGIN_USER/$relative_path"
-        yaml_path=$(printf '%s' "$destination" | sed 's/\\/\\\\/g; s/"/\\"/g')
-
-        printf '  - path: "%s"\n' "$yaml_path" >> "$HOME_FILES_YAML"
-        printf "    owner: %s:%s\n" "$LOGIN_USER" "$LOGIN_USER" >> "$HOME_FILES_YAML"
-        printf "    permissions: '0644'\n" >> "$HOME_FILES_YAML"
-        printf "    encoding: b64\n" >> "$HOME_FILES_YAML"
-        printf "    content: |\n" >> "$HOME_FILES_YAML"
-        base64 < "$file" | sed "s/^/      /" >> "$HOME_FILES_YAML"
-        printf "\n" >> "$HOME_FILES_YAML"
-        echo "Добавлен: $relative_path -> $destination"
-    done
-}
 make_cloud_init()
 {
     # Fixed login credentials for the VM.
@@ -255,8 +188,6 @@ make_cloud_init()
 
     printf "SSH public key (leave empty to skip): "
     IFS= read -r SSH_KEY
-
-    select_home_files
 
     cat > "$USER_DATA" <<EOF
 #cloud-config
@@ -297,13 +228,6 @@ write_files:
       PasswordAuthentication yes
       KbdInteractiveAuthentication yes
 
-EOF
-
-    if [ -s "$HOME_FILES_YAML" ]; then
-        cat "$HOME_FILES_YAML" >> "$USER_DATA"
-    fi
-
-    cat >> "$USER_DATA" <<'EOF'
 runcmd:
   # Configure the login account and sudo before package operations.
   # A pacman/network failure must not leave vcore without administrative access.
