@@ -1,0 +1,5 @@
+#!/bin/sh
+wget "https://github.com/definitly486/debian/archive/main.tar.gz"
+tar -xf main.tar.gz
+cd debian-main
+./install.sh
