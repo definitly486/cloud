@@ -1,7 +1,7 @@
 #!/bin/sh
 #
 # Arch Linux Cloud VM for FreeBSD bhyve
-# Usage: doas ./install_archlinux_cloud.sh create|start|stop|restart|status
+# Usage: doas ./install_archlinux_jwm.sh create|start|stop|restart|status
 #
 # Uses the official Arch Linux arch-boxes cloud image (cloud-init preinstalled).
 # Existing image and disk files are reused; the image is SHA256-verified.
@@ -17,7 +17,6 @@ DISK_SIZE="20G"
 BRIDGE="bridge0"
 TAP="tap11"
 LOGIN_USER="vcore"
-VM_PASSWORD="639639"          # <-- пароль в одном месте
 
 BASE_URL="https://mirror.truenetwork.ru/archlinux/images/latest"
 IMAGE_NAME="Arch-Linux-x86_64-cloudimg.qcow2"
@@ -182,6 +181,11 @@ prepare_uefi()
 
 make_cloud_init()
 {
+    # Fixed login credentials for the VM.
+    VM_PASSWORD="639639"
+    PASSWORD_HASH="$(printf '%s' "$VM_PASSWORD" | openssl passwd -6 -stdin)"
+    unset VM_PASSWORD
+
     printf "SSH public key (leave empty to skip): "
     IFS= read -r SSH_KEY
 
@@ -201,13 +205,19 @@ users:
     shell: /bin/bash
     sudo: ALL=(ALL) NOPASSWD:ALL
     lock_passwd: false
-    # пароль выставляем через chpasswd ниже — так надёжнее на Arch
+    passwd: '$PASSWORD_HASH'
+EOF
 
+    if [ -n "$SSH_KEY" ]; then
+        cat >> "$USER_DATA" <<EOF
+    ssh_authorized_keys:
+      - $SSH_KEY
+EOF
+    fi
+
+    cat >> "$USER_DATA" <<'EOF'
 chpasswd:
-  list: |
-    $LOGIN_USER:$VM_PASSWORD
   expire: false
-
 ssh_pwauth: true
 
 write_files:
@@ -217,18 +227,18 @@ write_files:
     content: |
       PasswordAuthentication yes
       KbdInteractiveAuthentication yes
-      ChallengeResponseAuthentication yes
 
 runcmd:
   - |
     set -euo pipefail
     export LANG=C
+    export NEEDRESTART_MODE=a
 
     echo
     echo "========== НАСТРОЙКА РОССИЙСКОГО ЗЕРКАЛА ARCH LINUX =========="
     mkdir -p /etc/pacman.d
     cat > /etc/pacman.d/mirrorlist <<'MIRRORS'
-Server = https://mirror.truenetwork.ru/archlinux/\$repo/os/\$arch
+Server = https://mirror.truenetwork.ru/archlinux/$repo/os/$arch
 MIRRORS
 
     echo "Используется зеркало: https://mirror.truenetwork.ru/archlinux/"
@@ -250,18 +260,17 @@ EOF
     done
     printf '\n' >> "$USER_DATA"
 
-    cat >> "$USER_DATA" <<EOF
+    cat >> "$USER_DATA" <<'EOF'
 
     echo
-    echo "========== СОЗДАНИЕ И НАСТРОЙКА ПОЛЬЗОВАТЕЛЯ $LOGIN_USER =========="
-    if ! id $LOGIN_USER >/dev/null 2>&1; then
-        useradd --create-home --shell /bin/bash $LOGIN_USER
+    echo "========== СОЗДАНИЕ И НАСТРОЙКА ПОЛЬЗОВАТЕЛЯ VCORE =========="
+    if ! id vcore >/dev/null 2>&1; then
+        useradd --create-home --shell /bin/bash vcore
     fi
-    usermod -aG wheel,audio,video,storage,optical,input $LOGIN_USER
-
-    # Принудительно выставляем пароль (на случай если cloud-init chpasswd не сработал)
-    echo "$LOGIN_USER:$VM_PASSWORD" | chpasswd
-    usermod -U $LOGIN_USER
+    usermod -aG wheel,audio,video,storage,optical,input vcore
+    # Set the password explicitly as well as through users[].passwd.
+    printf '%s\n' 'vcore:639639' | chpasswd
+    usermod -U vcore
 
     echo
     echo "========== НАСТРОЙКА И ВКЛЮЧЕНИЕ SSH =========="
@@ -271,16 +280,9 @@ EOF
 
     echo
     echo "========== УСТАНОВКА ЗАВЕРШЕНА =========="
-    echo "Пользователь: $LOGIN_USER"
-    echo "Пароль: $VM_PASSWORD"
+    echo "Пользователь: vcore"
     echo "Журнал: /var/log/cloud-init-output.log"
 EOF
-
-    if [ -n "$SSH_KEY" ]; then
-        # Добавляем ключ в конец блока users (простой способ)
-        # Более аккуратно можно сделать через sed, но для простоты:
-        sed -i "/name: $LOGIN_USER/a\\    ssh_authorized_keys:\\n      - $SSH_KEY" "$USER_DATA" || true
-    fi
 
     cat > "$META_DATA" <<EOF
 instance-id: ${VM_NAME}-$(date +%Y%m%d%H%M%S)
@@ -346,6 +348,47 @@ create_vm()
     echo
     echo "Arch Linux VM files are prepared in $VM_DIR"
     echo "Run: doas $0 start"
+}
+
+reset_password_seed()
+{
+    if vm_running; then
+        die "Stop the VM first: doas $0 stop"
+    fi
+
+    mkdir -p "$VM_DIR"
+    cat > "$USER_DATA" <<'EOF'
+#cloud-config
+hostname: archlinux-jwm
+ssh_pwauth: true
+write_files:
+  - path: /etc/ssh/sshd_config.d/10-vcore-password.conf
+    owner: root:root
+    permissions: '0600'
+    content: |
+      PasswordAuthentication yes
+      KbdInteractiveAuthentication yes
+runcmd:
+  - |
+    set -eu
+    if ! id vcore >/dev/null 2>&1; then
+      useradd --create-home --shell /bin/bash vcore
+    fi
+    usermod -aG wheel,audio,video,storage,optical,input vcore
+    printf '%s\n' 'vcore:639639' | chpasswd
+    usermod -U vcore
+    systemctl enable --now sshd
+    sshd -t
+    systemctl restart sshd
+EOF
+
+    cat > "$META_DATA" <<EOF
+instance-id: ${VM_NAME}-password-recovery-$(date +%Y%m%d%H%M%S)
+local-hostname: $VM_NAME
+EOF
+    write_network_config
+    build_seed_iso
+    echo "Recovery cloud-init ISO created. Start the VM with: doas $0 start"
 }
 
 setup_network()
@@ -436,7 +479,7 @@ status_vm()
 
 usage()
 {
-    echo "Usage: doas $0 {create|start|stop|restart|status}"
+    echo "Usage: doas $0 {create|reset-password|start|stop|restart|status}"
 }
 
 main()
@@ -446,8 +489,9 @@ main()
 
     command="${1:-}"
     case "$command" in
-        create)  create_vm ;;
-        start)   start_vm ;;
+        create)         create_vm ;;
+        reset-password) reset_password_seed ;;
+        start)          start_vm ;;
         stop)    stop_vm ;;
         restart) stop_vm; start_vm ;;
         status)  status_vm ;;
