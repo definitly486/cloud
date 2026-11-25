@@ -29,7 +29,7 @@ cat << 'EOF' > /etc/netplan/50-cloud-init.yaml
 network:
   version: 2
   ethernets:
-    enp0s1:
+    enp0s10:
       dhcp4: true
       dhcp6: true
 EOF
@@ -54,3 +54,17 @@ chown vcore:vcore /home/vcore/.jwmrc
 
 cp jwmrc /home/vcore/.jwmrc
 chown vcore:vcore /home/vcore/.jwmrc
+
+if [[ "$XDG_CURRENT_DESKTOP" == *"GNOME"* ]]; then
+    gsettings set org.gnome.desktop.input-sources sources "[(\x27xkb\x27, \x27us\x27), (\x27xkb\x27, \x27ru\x27)]"
+    gsettings set org.gnome.desktop.input-sources xkb-options "[\x27grp:alt_shift_toggle\x27]"
+elif [[ "$XDG_CURRENT_DESKTOP" == *"KDE"* ]]; then
+    kwriteconfig6 --file kxkbrc --group Layout --key LayoutList "us,ru"
+    kwriteconfig6 --file kxkbrc --group Layout --key Use true
+    kwriteconfig6 --file kxkbrc --group Layout --key Options "grp:alt_shift_toggle"
+    dbus-send --session --type=signal --reply-timeout=100 --dest=org.kde.keyboard /Layouts org.kde.keyboard.reloadConfig
+elif [ -n "$DISPLAY" ] && command -v setxkbmap >/dev/null 2>&1; then
+    setxkbmap -layout "us,ru" -option "grp:alt_shift_toggle"
+else
+    echo "Графическое окружение не определено или используется чистый Wayland (не GNOME/KDE)."
+fi
