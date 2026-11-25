@@ -10,7 +10,7 @@
 set -eu
 
 VM_NAME="archlinux-jwm"
-VM_DIR="/vm/archlinux-jwm"
+VM_DIR="/media/vm/archlinux-jwm"
 VCPUS="2"
 MEMORY="2G"
 DISK_SIZE="20G"
