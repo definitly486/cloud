@@ -188,10 +188,27 @@ select_home_files()
             /) echo "Selecting / itself is not supported." >&2; continue ;;
         esac
 
-        if grep -Fqx "$source_path" "$VM_DIR/home-files.list" 2>/dev/null; then
-            echo "Already selected, skipping: $source_path"
-            continue
+        duplicate=0
+        if [ -f "$VM_DIR/home-files.list" ]; then
+            while IFS= read -r selected_path; do
+                case "$source_path" in
+                    "$selected_path"|"$selected_path"/*)
+                        echo "Already included by selected folder, skipping: $source_path"
+                        duplicate=1
+                        break
+                        ;;
+                esac
+                case "$selected_path" in
+                    "$source_path"/*)
+                        echo "Warning: $source_path contains an already selected item: $selected_path"
+                        echo "Select the parent folder first to avoid duplicate data."
+                        duplicate=1
+                        break
+                        ;;
+                esac
+            done < "$VM_DIR/home-files.list"
         fi
+        [ "$duplicate" -eq 0 ] || continue
 
         parent=$(dirname "$source_path")
         item=$(basename "$source_path")
