@@ -232,6 +232,18 @@ runcmd:
     export NEEDRESTART_MODE=a
 
     echo
+    echo "========== НАСТРОЙКА РОССИЙСКОГО ЗЕРКАЛА ARCH LINUX =========="
+    mkdir -p /etc/pacman.d
+    cat > /etc/pacman.d/mirrorlist <<'MIRRORS'
+Server = https://mirror.truenetwork.ru/archlinux/$repo/os/$arch
+MIRRORS
+
+    echo "Используется зеркало: https://mirror.truenetwork.ru/archlinux/"
+    echo
+    echo "========== ОБНОВЛЕНИЕ БАЗЫ ПАКЕТОВ =========="
+    pacman -Syy --noconfirm
+
+    echo
     echo "========== ARCH LINUX: ОБНОВЛЕНИЕ СИСТЕМЫ =========="
     pacman -Syu --noconfirm
 
