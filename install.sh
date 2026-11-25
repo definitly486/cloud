@@ -11,5 +11,5 @@ EOF
 chown vcore:vcore /home/vcore/.xinitrc
 chmod +x /home/vcore/.xinitrc
 
-cp /etc/jwm/system.jwmrc ~/.jwmrc
+cp /etc/jwm/system.jwmrc /home/vcore/.jwmrc
 chown vcore:vcore /home/vcore/.jwmrc
