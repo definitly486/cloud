@@ -37,27 +37,7 @@ PIDFILE="$VM_DIR/bhyve.pid"
 LOGFILE="$VM_DIR/bhyve.log"
 
 PACKAGES="
-jwm
-xorg
-git
-curl
-firefox-esr-l10n-ru
-l3afpad
-mc
-pcmanfm
-qemu-utils
-qemu-system-x86
-jgmenu
-alacritty
-sudo
-pipewire
-wireplumber
-pipewire-audio
-pasystray
-pavucontrol
-arqiver
-screen
-libqt6webenginewidgets6
+
 "
 
 die()
