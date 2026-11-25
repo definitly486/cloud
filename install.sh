@@ -10,3 +10,6 @@ EOF
 
 chown vcore:vcore /home/vcore/.xinitrc
 chmod +x /home/vcore/.xinitrc
+
+cp /etc/jwm/system.jwmrc ~/.jwmrc
+chown vcore:vcore /home/vcore/.jwmrc
