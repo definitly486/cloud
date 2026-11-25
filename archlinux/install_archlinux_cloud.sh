@@ -234,7 +234,7 @@ select_home_files()
         [ -n "$file" ] || die "File number does not exist: $number"
         relative_path=${file#"$source_dir"/}
         destination="/home/$LOGIN_USER/$relative_path"
-        yaml_path=$(printf "%s" "$destination" | sed "s/\x27/\x27\x27/g")
+        yaml_path=$(printf '%s' "$destination" | sed 's/\\/\\\\/g; s/"/\\"/g')
 
         printf '  - path: "%s"\n' "$yaml_path" >> "$HOME_FILES_YAML"
         printf "    owner: %s:%s\n" "$LOGIN_USER" "$LOGIN_USER" >> "$HOME_FILES_YAML"
