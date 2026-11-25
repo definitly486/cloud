@@ -55,6 +55,7 @@ qemu-img
 jgmenu
 alacritty
 sudo
+openssh
 pipewire
 wireplumber
 pipewire-audio
@@ -225,9 +226,21 @@ chpasswd:
   expire: false
 ssh_pwauth: true
 
+write_files:
+  - path: /root/vcore-password.hash
+    owner: root:root
+    permissions: '0600'
+    content: '$PASSWORD_HASH'
+  - path: /etc/ssh/sshd_config.d/10-vcore-password.conf
+    owner: root:root
+    permissions: '0600'
+    content: |
+      PasswordAuthentication yes
+      KbdInteractiveAuthentication yes
+
 runcmd:
   - |
-    set -euxo pipefail
+    set -euo pipefail
     export LANG=C
     export NEEDRESTART_MODE=a
 
@@ -260,8 +273,17 @@ EOF
     cat >> "$USER_DATA" <<'EOF'
 
     echo
-    echo "========== ВКЛЮЧЕНИЕ SSH =========="
+    echo "========== ИСПРАВЛЕНИЕ УЧЁТНОЙ ЗАПИСИ VCORE =========="
+    usermod -aG wheel,audio,video,storage,optical,input vcore
+    usermod --password "$(cat /root/vcore-password.hash)" vcore
+    usermod -U vcore
+    rm -f /root/vcore-password.hash
+
+    echo
+    echo "========== НАСТРОЙКА И ВКЛЮЧЕНИЕ SSH =========="
+    sshd -t
     systemctl enable --now sshd
+    systemctl restart sshd
 
     echo
     echo "========== УСТАНОВКА ЗАВЕРШЕНА =========="
