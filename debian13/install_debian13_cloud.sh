@@ -322,8 +322,8 @@ EOF
     echo
     echo "========== УСТАНОВКА ЗАВЕРШЕНА =========="
 
-    if [ -b "$(blkid -L CIDATA 2>/dev/null)" ]; then
-        SEED_DEVICE="$(blkid -L CIDATA)"
+    SEED_DEVICE="$(blkid -L cidata 2>/dev/null || blkid -L CIDATA 2>/dev/null || true)"
+    if [ -n "$SEED_DEVICE" ] && [ -b "$SEED_DEVICE" ]; then
         mkdir -p /mnt/cloud-seed
         if mount -o ro "$SEED_DEVICE" /mnt/cloud-seed; then
             if [ -f /mnt/cloud-seed/home-files.tar ]; then
@@ -368,7 +368,7 @@ build_seed_iso()
         cd "$VM_DIR"
         if [ -s "$HOME_FILES_ARCHIVE" ]; then
             mkisofs -quiet -output "$SEED_ISO" -volid cidata -joliet -rock \
-                user-data meta-data network-config "$HOME_FILES_ARCHIVE"
+                user-data meta-data network-config home-files.tar
         else
             mkisofs -quiet -output "$SEED_ISO" -volid cidata -joliet -rock \
                 user-data meta-data network-config
