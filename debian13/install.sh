@@ -1,5 +1,16 @@
 #!/bin/sh
 
+# Отделяем выполнение от SSH-сессии
+if [ "${INSTALL_SH_BACKGROUND:-0}" != "1" ]; then
+    INSTALL_SH_BACKGROUND=1 nohup sh "$0" "$@" \
+        </dev/null >/dev/null 2>&1 &
+
+    echo "Скрипт запущен в фоне."
+    echo "SSH можно закрыть — настройка продолжится."
+    exit 0
+fi
+
+
 # Скрипт рассчитан на запуск от root по SSH.
 # Ошибка отдельной команды не завершает скрипт и не закрывает SSH-сессию.
 # Полный журнал: /var/log/vcore-setup.log
