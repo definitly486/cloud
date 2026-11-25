@@ -259,7 +259,7 @@ EOF
     if [ -n "$HOME_FILES_B64" ]; then
         cat >> "$USER_DATA" <<EOF
 write_files:
-  - path: /var/tmp/vcore-home-files.tar.b64
+  - path: /var/tmp/vcore-home-files.tar
     owner: root:root
     permissions: '0600'
     encoding: b64
@@ -324,11 +324,11 @@ EOF
     echo
     echo "========== УСТАНОВКА ЗАВЕРШЕНА =========="
 
-    if [ -f /var/tmp/vcore-home-files.tar.b64 ]; then
+    if [ -f /var/tmp/vcore-home-files.tar ]; then
         echo "========== КОПИРОВАНИЕ В ДОМАШНЮЮ ПАПКУ =========="
-        base64 -d /var/tmp/vcore-home-files.tar.b64 | tar -xf - -C "/home/$LOGIN_USER"
+        tar -xf /var/tmp/vcore-home-files.tar -C "/home/$LOGIN_USER"
         chown -R "$LOGIN_USER:$LOGIN_USER" "/home/$LOGIN_USER"
-        rm -f /var/tmp/vcore-home-files.tar.b64
+        rm -f /var/tmp/vcore-home-files.tar
         echo "Selected files copied to /home/$LOGIN_USER"
     fi
 EOF
