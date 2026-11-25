@@ -74,7 +74,8 @@ pacman -S --needed --noconfirm \
     pavucontrol \
     xarchiver \
     screen \
-    qt6-webengine
+    qt6-webengine \
+    wget		
 
 echo "===== Настройка сети ====="
 
