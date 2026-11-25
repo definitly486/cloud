@@ -200,7 +200,7 @@ select_home_files()
         return
     }
 
-    echo "\nДоступные файлы:"
+    printf '\nДоступные файлы:\n'
     number=1
     while IFS= read -r file; do
         relative_path=${file#"$source_dir"/}
@@ -236,7 +236,7 @@ select_home_files()
         destination="/home/$LOGIN_USER/$relative_path"
         yaml_path=$(printf "%s" "$destination" | sed "s/\x27/\x27\x27/g")
 
-        printf "  - path: '%s'\n" "$yaml_path" >> "$HOME_FILES_YAML"
+        printf '  - path: "%s"\n' "$yaml_path" >> "$HOME_FILES_YAML"
         printf "    owner: %s:%s\n" "$LOGIN_USER" "$LOGIN_USER" >> "$HOME_FILES_YAML"
         printf "    permissions: '0644'\n" >> "$HOME_FILES_YAML"
         printf "    encoding: b64\n" >> "$HOME_FILES_YAML"
