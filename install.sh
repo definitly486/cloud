@@ -1,5 +1,20 @@
 usermod -aG sudo vcore
 
+# Настройка зеркала Debian 13
+mkdir -p /etc/apt/sources.list.d
+
+if [ -f /etc/apt/sources.list.d/debian.sources ]; then
+    mv /etc/apt/sources.list.d/debian.sources \
+       /etc/apt/sources.list.d/debian.sources.disabled
+fi
+
+cat << 'EOF' > /etc/apt/sources.list
+deb https://mirror.truenetwork.ru/debian trixie main contrib non-free non-free-firmware
+deb https://mirror.truenetwork.ru/debian trixie-updates main contrib non-free non-free-firmware
+deb https://mirror.truenetwork.ru/debian-security trixie-security main contrib non-free non-free-firmware
+EOF
+
+
 apt update
 
 apt install -y jwm xorg git curl firefox-esr-l10n-ru l3afpad mc \

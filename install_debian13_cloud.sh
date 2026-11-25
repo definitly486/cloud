@@ -218,6 +218,20 @@ runcmd:
     export DEBIAN_FRONTEND=noninteractive
 
     echo
+    echo "========== НАСТРОЙКА ЗЕРКАЛА ПАКЕТОВ =========="
+    # Debian 13 uses deb822 sources in /etc/apt/sources.list.d/debian.sources.
+    # Replace both the main archive and the security archive with TrueNetwork.
+    for source_file in /etc/apt/sources.list /etc/apt/sources.list.d/debian.sources; do
+        if [ -f "$source_file" ]; then
+            sed -i \
+                -e 's|https\?://deb.debian.org/debian|https://mirror.truenetwork.ru/debian|g' \
+                -e 's|https\?://security.debian.org/debian-security|https://mirror.truenetwork.ru/debian-security|g' \
+                "$source_file"
+        fi
+    done
+
+    echo "Используется зеркало: https://mirror.truenetwork.ru"
+    echo
     echo "========== ОБНОВЛЕНИЕ СПИСКА ПАКЕТОВ =========="
     apt-get update
 
