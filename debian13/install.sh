@@ -106,7 +106,7 @@ if cat > /etc/netplan/50-cloud-init.yaml <<'EOF'
 network:
   version: 2
   ethernets:
-    enp0s1:
+    enp0s10:
       dhcp4: true
       dhcp6: true
 EOF
