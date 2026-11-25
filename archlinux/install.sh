@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 LOGIN_USER="vcore"
-NET_IFACE="enp0s10"
+NET_IFACE="eth0"
 MIRROR="https://mirror.truenetwork.ru/archlinux"
 
 if [[ $EUID -ne 0 ]]; then
