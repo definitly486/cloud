@@ -1,19 +1,18 @@
 #!/bin/sh
 
-# Отделяем выполнение от SSH-сессии
-if [ "${INSTALL_SH_BACKGROUND:-0}" != "1" ]; then
-    INSTALL_SH_BACKGROUND=1 nohup sh "$0" "$@" \
-        </dev/null >/dev/null 2>&1 &
-
-    echo "Скрипт запущен в фоне."
-    echo "SSH можно закрыть — настройка продолжится."
-    exit 0
-fi
-
-
 # Скрипт рассчитан на запуск от root по SSH.
 # Ошибка отдельной команды не завершает скрипт и не закрывает SSH-сессию.
 # Полный журнал: /var/log/vcore-setup.log
+
+# Отсоединяемся от SSH только при обычном запуске.
+# Повторный запуск внутри nohup не создаёт ещё один фоновый процесс.
+if [ "${INSTALL_SH_BACKGROUND:-0}" != "1" ]; then
+    INSTALL_SH_BACKGROUND=1
+    export INSTALL_SH_BACKGROUND
+    nohup sh "$0" "$@" </dev/null >/dev/null 2>&1 &
+    echo "Настройка запущена в фоне. Журнал: /var/log/vcore-setup.log"
+    exit 0
+fi
 
 LOG_FILE="/var/log/vcore-setup.log"
 mkdir -p /var/log
@@ -23,25 +22,15 @@ log() {
     printf '%s %s\n' "$(date '+%F %T' 2>/dev/null)" "$*" | tee -a "$LOG_FILE"
 }
 
-run_step() {
-    description=$1
-    shift
-
-    log "НАЧАЛО: $description"
-    "$@" 2>&1 | tee -a "$LOG_FILE"
-    command_status=${PIPESTATUS:-}
-
-    # POSIX sh не поддерживает PIPESTATUS. Статус команды сохраняем
-    # через временный файл и отдельный запуск без конвейера.
-    # Поэтому команды ниже запускаются через run_plain.
-}
-
 run_plain() {
     description=$1
     shift
 
     log "НАЧАЛО: $description"
-    "$@"
+    # Сохраняем stdout и stderr КАЖДОЙ команды в общий журнал.
+    # Статус команды читаем сразу после её завершения (без конвейера),
+    # поэтому решение совместимо с POSIX sh.
+    "$@" >>"$LOG_FILE" 2>&1
     result=$?
 
     if [ "$result" -eq 0 ]; then
