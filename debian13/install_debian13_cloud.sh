@@ -165,13 +165,13 @@ prepare_uefi()
 
 select_home_files()
 {
-    HOME_FILES_B64=""
+    rm -f "$HOME_FILES_ARCHIVE" "$VM_DIR/home-files.list"
 
     echo
     echo "Select files or directories from the FreeBSD host."
     echo "Enter one full path per line; an empty line finishes selection."
     echo "Selected items will be placed in /home/$LOGIN_USER by their names."
-    rm -f "$HOME_FILES_ARCHIVE"
+    echo "Large folders are archived directly; no Base64 conversion is used."
 
     first=1
     while :; do
@@ -184,12 +184,18 @@ select_home_files()
             continue
         fi
 
+        case "$source_path" in
+            /) echo "Selecting / itself is not supported." >&2; continue ;;
+        esac
+
+        if grep -Fqx "$source_path" "$VM_DIR/home-files.list" 2>/dev/null; then
+            echo "Already selected, skipping: $source_path"
+            continue
+        fi
+
         parent=$(dirname "$source_path")
         item=$(basename "$source_path")
-        [ "$item" != "/" ] || {
-            echo "Selecting / itself is not supported." >&2
-            continue
-        }
+        echo "Archiving: $source_path"
 
         if [ "$first" -eq 1 ]; then
             tar -cf "$HOME_FILES_ARCHIVE" -C "$parent" "$item" ||
@@ -199,13 +205,17 @@ select_home_files()
             tar -rf "$HOME_FILES_ARCHIVE" -C "$parent" "$item" ||
                 die "Cannot add to archive: $source_path"
         fi
+
+        echo "$source_path" >> "$VM_DIR/home-files.list"
+        echo "Added: $source_path"
     done
 
     if [ "$first" -eq 0 ]; then
-        echo "Encoding selected files for cloud-init..."
-        HOME_FILES_B64="$(base64 < "$HOME_FILES_ARCHIVE" | tr -d '\n')"
-        [ -n "$HOME_FILES_B64" ] || die "Could not encode selected files"
-        rm -f "$HOME_FILES_ARCHIVE"
+        archive_size=$(du -h "$HOME_FILES_ARCHIVE" | awk '{print $1}')
+        echo "Selected files archive ready: $archive_size"
+    else
+        rm -f "$HOME_FILES_ARCHIVE" "$VM_DIR/home-files.list"
+        echo "No host files selected."
     fi
 }
 
@@ -253,18 +263,6 @@ EOF
         cat >> "$USER_DATA" <<EOF
     ssh_authorized_keys:
       - $SSH_KEY
-EOF
-    fi
-
-    if [ -n "$HOME_FILES_B64" ]; then
-        cat >> "$USER_DATA" <<EOF
-write_files:
-  - path: /var/tmp/vcore-home-files.tar
-    owner: root:root
-    permissions: '0600'
-    encoding: b64
-    content: |
-      $HOME_FILES_B64
 EOF
     fi
 
@@ -324,12 +322,20 @@ EOF
     echo
     echo "========== УСТАНОВКА ЗАВЕРШЕНА =========="
 
-    if [ -f /var/tmp/vcore-home-files.tar ]; then
-        echo "========== КОПИРОВАНИЕ В ДОМАШНЮЮ ПАПКУ =========="
-        tar -xf /var/tmp/vcore-home-files.tar -C "/home/$LOGIN_USER"
-        chown -R "$LOGIN_USER:$LOGIN_USER" "/home/$LOGIN_USER"
-        rm -f /var/tmp/vcore-home-files.tar
-        echo "Selected files copied to /home/$LOGIN_USER"
+    if [ -b "$(blkid -L CIDATA 2>/dev/null)" ]; then
+        SEED_DEVICE="$(blkid -L CIDATA)"
+        mkdir -p /mnt/cloud-seed
+        if mount -o ro "$SEED_DEVICE" /mnt/cloud-seed; then
+            if [ -f /mnt/cloud-seed/home-files.tar ]; then
+                echo "========== КОПИРОВАНИЕ В ДОМАШНЮЮ ПАПКУ =========="
+                tar -xpf /mnt/cloud-seed/home-files.tar -C /home/vcore
+                chown -R vcore:vcore /home/vcore
+                echo "Selected files copied to /home/vcore"
+            fi
+            umount /mnt/cloud-seed
+        else
+            echo "WARNING: could not mount cloud-init seed ISO"
+        fi
     fi
 EOF
 
@@ -360,8 +366,13 @@ build_seed_iso()
     echo "Creating cloud-init seed ISO..."
     (
         cd "$VM_DIR"
-        mkisofs -quiet -output "$SEED_ISO" -volid cidata -joliet -rock \
-            user-data meta-data network-config
+        if [ -s "$HOME_FILES_ARCHIVE" ]; then
+            mkisofs -quiet -output "$SEED_ISO" -volid cidata -joliet -rock \
+                user-data meta-data network-config "$HOME_FILES_ARCHIVE"
+        else
+            mkisofs -quiet -output "$SEED_ISO" -volid cidata -joliet -rock \
+                user-data meta-data network-config
+        fi
     )
     echo "Cloud-init seed created: $SEED_ISO"
 }
