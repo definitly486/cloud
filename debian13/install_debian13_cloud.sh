@@ -10,7 +10,7 @@
 set -eu
 
 VM_NAME="debian13"
-VM_DIR="/vm/debian13"
+VM_DIR="/media/vm/debian13"
 VCPUS="2"
 MEMORY="2G"
 DISK_SIZE="20G"
