@@ -1,3 +1,4 @@
+#!/bin/sh
 usermod -aG sudo vcore
 
 # Настройка зеркала Debian 13
@@ -20,7 +21,7 @@ apt update
 apt install -y jwm xorg git curl firefox-esr-l10n-ru l3afpad mc \
 pcmanfm qemu-utils qemu-system-x86 jgmenu alacritty \
 sudo pipewire wireplumber pipewire-audio pasystray pavucontrol \
-arqiver screen libqt6webenginewidgets6 netplan.io
+arqiver screen libqt6webenginewidgets6 netplan 
 
 # Настройка сети
 mkdir -p /etc/netplan
@@ -55,16 +56,30 @@ chown vcore:vcore /home/vcore/.jwmrc
 cp jwmrc /home/vcore/.jwmrc
 chown vcore:vcore /home/vcore/.jwmrc
 
-if [[ "$XDG_CURRENT_DESKTOP" == *"GNOME"* ]]; then
-    gsettings set org.gnome.desktop.input-sources sources "[(\x27xkb\x27, \x27us\x27), (\x27xkb\x27, \x27ru\x27)]"
-    gsettings set org.gnome.desktop.input-sources xkb-options "[\x27grp:alt_shift_toggle\x27]"
-elif [[ "$XDG_CURRENT_DESKTOP" == *"KDE"* ]]; then
-    kwriteconfig6 --file kxkbrc --group Layout --key LayoutList "us,ru"
-    kwriteconfig6 --file kxkbrc --group Layout --key Use true
-    kwriteconfig6 --file kxkbrc --group Layout --key Options "grp:alt_shift_toggle"
-    dbus-send --session --type=signal --reply-timeout=100 --dest=org.kde.keyboard /Layouts org.kde.keyboard.reloadConfig
-elif [ -n "$DISPLAY" ] && command -v setxkbmap >/dev/null 2>&1; then
-    setxkbmap -layout "us,ru" -option "grp:alt_shift_toggle"
-else
-    echo "Графическое окружение не определено или используется чистый Wayland (не GNOME/KDE)."
-fi
+case "${XDG_CURRENT_DESKTOP:-}" in
+    *GNOME*)
+        gsettings set org.gnome.desktop.input-sources sources \
+            "[('xkb', 'us'), ('xkb', 'ru')]"
+
+        gsettings set org.gnome.desktop.input-sources xkb-options \
+            "['grp:alt_shift_toggle']"
+        ;;
+
+    *KDE*)
+        kwriteconfig6 --file kxkbrc --group Layout --key LayoutList "us,ru"
+        kwriteconfig6 --file kxkbrc --group Layout --key Use true
+        kwriteconfig6 --file kxkbrc --group Layout --key Options "grp:alt_shift_toggle"
+
+        dbus-send --session --type=signal --reply-timeout=100 \
+            --dest=org.kde.keyboard /Layouts \
+            org.kde.keyboard.reloadConfig
+        ;;
+
+    *)
+        if [ -n "${DISPLAY:-}" ] && command -v setxkbmap >/dev/null 2>&1; then
+            setxkbmap -layout "us,ru" -option "grp:alt_shift_toggle"
+        else
+            echo "Графическое окружение не определено или используется чистый Wayland (не GNOME/KDE)."
+        fi
+        ;;
+esac
