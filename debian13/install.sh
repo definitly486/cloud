@@ -188,12 +188,9 @@ case "${XDG_CURRENT_DESKTOP:-}" in
         fi
         ;;
     *)
-        if [ -n "${DISPLAY:-}" ] && command -v setxkbmap >/dev/null 2>&1; then
-            run_plain "Настройка раскладки X11" \
+       
                 setxkbmap -layout "us,ru" -option "grp:alt_shift_toggle"
-        else
-            log "Пропуск раскладки: скрипт запущен без графической сессии"
-        fi
+      
         ;;
 esac
 
